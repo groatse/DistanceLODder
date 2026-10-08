@@ -14,6 +14,8 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "HAL/PlatformTime.h"
+#include "ProfilingDebugging/CsvProfiler.h"
 #include "StaticMeshResources.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(DistanceLODderSubsystem)
@@ -26,6 +28,8 @@ DECLARE_DWORD_COUNTER_STAT(TEXT("Tracked components"), STAT_DistanceLODder_Track
 DECLARE_DWORD_COUNTER_STAT(TEXT("Evaluated this frame"), STAT_DistanceLODder_Evaluated, STATGROUP_DistanceLODder);
 DECLARE_DWORD_COUNTER_STAT(TEXT("LOD changes this frame"), STAT_DistanceLODder_Changes, STATGROUP_DistanceLODder);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Queued changes"), STAT_DistanceLODder_Queued, STATGROUP_DistanceLODder);
+
+CSV_DEFINE_CATEGORY(DistanceLODder, true);
 
 static TAutoConsoleVariable<int32> CVarDistanceLODderEnabled(
 	TEXT("DistanceLODder.Enabled"),
@@ -113,7 +117,28 @@ void UDistanceLODderSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	SCOPE_CYCLE_COUNTER(STAT_DistanceLODder_Tick);
+	CSV_SCOPED_TIMING_STAT(DistanceLODder, Tick);
 
+	const uint64 StartCycles = FPlatformTime::Cycles64();
+	LastFrameStats = FDistanceLODderFrameStats();
+	UpdateLODs();
+	LastFrameStats.TickMs = FPlatformTime::ToMilliseconds64(FPlatformTime::Cycles64() - StartCycles);
+	LastFrameStats.Tracked = Entries.Num();
+	LastFrameStats.Queued = ChangeQueue.Num();
+
+	SET_DWORD_STAT(STAT_DistanceLODder_Tracked, LastFrameStats.Tracked);
+	SET_DWORD_STAT(STAT_DistanceLODder_Evaluated, LastFrameStats.Evaluated);
+	SET_DWORD_STAT(STAT_DistanceLODder_Changes, LastFrameStats.Changed);
+	SET_DWORD_STAT(STAT_DistanceLODder_Queued, LastFrameStats.Queued);
+
+	CSV_CUSTOM_STAT(DistanceLODder, Tracked, LastFrameStats.Tracked, ECsvCustomStatOp::Set);
+	CSV_CUSTOM_STAT(DistanceLODder, Evaluated, LastFrameStats.Evaluated, ECsvCustomStatOp::Set);
+	CSV_CUSTOM_STAT(DistanceLODder, Changed, LastFrameStats.Changed, ECsvCustomStatOp::Set);
+	CSV_CUSTOM_STAT(DistanceLODder, Queued, LastFrameStats.Queued, ECsvCustomStatOp::Set);
+}
+
+void UDistanceLODderSubsystem::UpdateLODs()
+{
 	if (!IsActive())
 	{
 		if (bWasActive)
@@ -162,10 +187,8 @@ void UDistanceLODderSubsystem::Tick(float DeltaTime)
 		bInitialPass = false;
 	}
 
-	SET_DWORD_STAT(STAT_DistanceLODder_Tracked, Entries.Num());
-	SET_DWORD_STAT(STAT_DistanceLODder_Evaluated, NumEvaluated);
-	SET_DWORD_STAT(STAT_DistanceLODder_Changes, NumChanged);
-	SET_DWORD_STAT(STAT_DistanceLODder_Queued, ChangeQueue.Num());
+	LastFrameStats.Evaluated = NumEvaluated;
+	LastFrameStats.Changed = NumChanged;
 
 #if ENABLE_DRAW_DEBUG
 	if (CVarDistanceLODderShowDebug.GetValueOnGameThread() > 0)

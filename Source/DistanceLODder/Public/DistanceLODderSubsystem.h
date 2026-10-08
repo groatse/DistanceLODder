@@ -16,6 +16,20 @@ class UCameraComponent;
 class ULevel;
 class UStaticMeshComponent;
 
+/** What the subsystem did in its last tick. */
+struct FDistanceLODderFrameStats
+{
+	/**
+	 * Time spent in the subsystem's tick. Doesn't include the render state rebuilds the LOD changes cause,
+	 * which happen later in the frame (end-of-frame updates and the render thread).
+	 */
+	double TickMs = 0.0;
+	int32 Evaluated = 0;
+	int32 Changed = 0;
+	int32 Queued = 0;
+	int32 Tracked = 0;
+};
+
 /**
  * Forces static mesh LODs from the distance to the player pawn's HMD camera, with hysteresis,
  * instead of letting UE pick them from the (gaze-dependent) LOD view every frame.
@@ -53,6 +67,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "DistanceLODder")
 	int32 GetNumTrackedComponents() const { return Entries.Num(); }
 
+	const FDistanceLODderFrameStats& GetLastFrameStats() const { return LastFrameStats; }
+
 	UFUNCTION(BlueprintPure, Category = "DistanceLODder")
 	bool IsComponentTracked(const UStaticMeshComponent* Component) const { return ComponentToEntry.Contains(Component); }
 
@@ -80,6 +96,7 @@ private:
 	};
 
 	bool IsActive() const;
+	void UpdateLODs();
 
 	void ScanLevel(ULevel* Level);
 	void RegisterActor(AActor* Actor);
@@ -131,4 +148,6 @@ private:
 	FDelegateHandle LevelAddedHandle;
 	FDelegateHandle LevelRemovedHandle;
 	FDelegateHandle ActorSpawnedHandle;
+
+	FDistanceLODderFrameStats LastFrameStats;
 };
