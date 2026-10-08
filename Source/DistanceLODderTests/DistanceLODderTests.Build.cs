@@ -14,6 +14,7 @@ public class DistanceLODderTests : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"DistanceLODder",
+			"FunctionalTesting",
 			"MeshDescription",
 			"StaticMeshDescription",
 		});
