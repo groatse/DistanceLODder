@@ -4,6 +4,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "DistanceLODderSettings.h"
 #include "DistanceLODderSubsystem.h"
+#include "DistanceLODderTestUtils.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
@@ -84,23 +85,7 @@ BEGIN_DEFINE_SPEC(FDistanceLODderWorldSpec, "DistanceLODder.World",
 
 	UStaticMeshComponent* SpawnMesh(const FVector& Location, EComponentMobility::Type Mobility = EComponentMobility::Static, UStaticMesh* InMesh = nullptr)
 	{
-		// SetStaticMesh refuses registered Static components after begin play, and deferred spawning already
-		// registers native components, so set up the component while it's unregistered.
-		const FTransform Transform(Location);
-		AStaticMeshActor* Actor = World->SpawnActorDeferred<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Transform);
-		UStaticMeshComponent* Component = Actor->GetStaticMeshComponent();
-		const bool bWasRegistered = Component->IsRegistered();
-		if (bWasRegistered)
-		{
-			Component->UnregisterComponent();
-		}
-		Component->SetMobility(Mobility);
-		Component->SetStaticMesh(InMesh ? InMesh : Mesh.Get());
-		if (bWasRegistered)
-		{
-			Component->RegisterComponent();
-		}
-		Actor->FinishSpawning(Transform);
+		UStaticMeshComponent* Component = DistanceLODderTests::SpawnStaticMeshActor(World, InMesh ? InMesh : Mesh.Get(), Location, Mobility);
 		TestNotNull(TEXT("Spawned mesh"), Component->GetStaticMesh().Get());
 		return Component;
 	}
