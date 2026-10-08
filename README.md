@@ -98,13 +98,23 @@ Blueprint, on the `DistanceLODder Subsystem` world subsystem:
 
 ## Tests
 
-Unit tests for the LOD math (`Source/DistanceLODder/Private/Tests/`) use UE's Automation Spec framework. They're only compiled in builds with `WITH_DEV_AUTOMATION_TESTS`. One test checks the switch distances against the engine's own `ComputeBoundsDrawDistance`.
+The tests live in the `DistanceLODderTests` module (DeveloperTool, so it's left out of Shipping). They use UE's Automation Spec framework:
+
+- `DistanceLODder.Math`: the LOD math on its own, including a check against the engine's `ComputeBoundsDrawDistance`.
+- `DistanceLODder.World`: the subsystem in a headless game world (`FTestWorldWrapper`). The test meshes are built at runtime, so no test assets are needed. The world specs cover:
+  - **Which meshes are tracked:** Static, Stationary, Movable, tagged, already forced, single-LOD and ISM meshes; global screen sizes.
+  - **LOD selection:** the first pass, hysteresis, the movement threshold, the change budget (nearest first), time slicing and live distance scale.
+  - **Giving meshes back:** turning off the console variable; something else changing the forced LOD; unregistered and destroyed components; `RefreshActor`; level added and removed handlers.
 
 Run them in the editor under Tools → Test Automation (`DistanceLODder.*`), or headless:
 
 ```
 UnrealEditor-Cmd.exe YourProject.uproject -ExecCmds="Automation RunTests DistanceLODder;Quit" -unattended -nullrhi -nopause -testexit="Automation Test Queue Empty"
 ```
+
+Not covered:
+- Finding the viewpoint from a real player pawn and HMD camera. The tests set the viewpoint directly.
+- Real level streaming. The tests call the level handlers directly.
 
 ## License
 
