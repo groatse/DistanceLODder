@@ -20,11 +20,6 @@
 			"Name": "DistanceLODder",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
-		},
-		{
-			"Name": "DistanceLODderEditor",
-			"Type": "Editor",
-			"LoadingPhase": "Default"
 		}
 	]
 }
