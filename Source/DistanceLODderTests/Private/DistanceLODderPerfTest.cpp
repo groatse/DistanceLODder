@@ -22,6 +22,13 @@ namespace
 	const TCHAR* const RunNames[] = { TEXT("On"), TEXT("Off") };
 	constexpr int32 NumRuns = UE_ARRAY_COUNT(RunNames);
 
+	/**
+	 * Frames to wait after ending a CSV capture before toggling the plugin or finishing the test. The capture
+	 * still records the frame EndCapture is called in, so toggling then would put the toggle hitch (every
+	 * forced LOD reset or applied at once) into the capture.
+	 */
+	constexpr int32 CooldownFrames = 2;
+
 	IConsoleVariable* EnabledCVar()
 	{
 		return IConsoleManager::Get().FindConsoleVariable(TEXT("DistanceLODder.Enabled"));
@@ -99,6 +106,23 @@ void ADistanceLODderPerfTest::Tick(float DeltaSeconds)
 	}
 
 	++PhaseFrames;
+	if (Phase == EPhase::Cooldown)
+	{
+		if (PhaseFrames >= CooldownFrames)
+		{
+			if (++RunIndex < NumRuns)
+			{
+				BeginRun();
+			}
+			else
+			{
+				Phase = EPhase::Done;
+				Report();
+			}
+		}
+		return;
+	}
+
 	if (Phase == EPhase::Settle)
 	{
 		// Also wait for queued LOD changes, e.g. the 2500 meshes spawned at the start, which go through the per-frame budget.
@@ -126,15 +150,8 @@ void ADistanceLODderPerfTest::Tick(float DeltaSeconds)
 	if (PathTime >= PathDuration)
 	{
 		EndRun();
-		if (++RunIndex < NumRuns)
-		{
-			BeginRun();
-		}
-		else
-		{
-			Phase = EPhase::Done;
-			Report();
-		}
+		Phase = EPhase::Cooldown;
+		PhaseFrames = 0;
 	}
 }
 

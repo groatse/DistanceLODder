@@ -88,7 +88,7 @@ private:
 		double Average(double Sum) const { return Frames > 0 ? Sum / Frames : 0.0; }
 	};
 
-	enum class EPhase : uint8 { Settle, Run, Done };
+	enum class EPhase : uint8 { Settle, Run, Cooldown, Done };
 
 	void BeginRun();
 	void EndRun();
