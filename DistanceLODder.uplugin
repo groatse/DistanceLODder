@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1.0",
 	"FriendlyName": "DistanceLODder",
-	"Description": "",
+	"Description": "Picks static mesh LODs by distance to the VR player instead of by view screen size.",
 	"Category": "Other",
 	"CreatedBy": "groatse",
 	"CreatedByURL": "https://github.com/groatse",
