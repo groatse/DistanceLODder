@@ -96,6 +96,16 @@ Blueprint, on the `DistanceLODder Subsystem` world subsystem:
 - **Components added at runtime** to an existing actor aren't picked up until `Refresh Actor` is called.
 - **Skeletal meshes, ISM/HISM and Nanite** are not handled.
 
+## Tests
+
+Unit tests for the LOD math (`Source/DistanceLODder/Private/Tests/`) use UE's Automation Spec framework. They're only compiled in builds with `WITH_DEV_AUTOMATION_TESTS`. One test checks the switch distances against the engine's own `ComputeBoundsDrawDistance`.
+
+Run them in the editor under Tools → Test Automation (`DistanceLODder.*`), or headless:
+
+```
+UnrealEditor-Cmd.exe YourProject.uproject -ExecCmds="Automation RunTests DistanceLODder;Quit" -unattended -nullrhi -nopause -testexit="Automation Test Queue Empty"
+```
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
