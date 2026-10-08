@@ -16,6 +16,7 @@ public class DistanceLODderTests : ModuleRules
 			"DistanceLODder",
 			"FunctionalTesting",
 			"MeshDescription",
+			"RenderCore",
 			"StaticMeshDescription",
 		});
 	}

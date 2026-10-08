@@ -6,6 +6,7 @@ Creates the DistanceLODder functional test content in the plugin's Content/Tests
   (with a 90 degree reference FOV).
 - FTEST_DistanceLODder: the test map, with ADistanceLODderFunctionalTest and tagged meshes.
 - L_DistanceLODder_Streamed: a streaming sublevel (Blueprint streaming, not initially loaded) with one mesh.
+- FTEST_DistanceLODderPerf: the perf map, with ADistanceLODderPerfTest (it spawns its mesh grid at runtime).
 
 Needs the PythonScriptPlugin and EditorScriptingUtilities plugins enabled in the host project. Run headless with:
 
@@ -13,7 +14,8 @@ Needs the PythonScriptPlugin and EditorScriptingUtilities plugins enabled in the
 
 Not -nullrhi: placing actors queries the level viewport, which crashes (divide by zero) without a renderer.
 
-Existing assets at these paths are replaced.
+Only missing assets are created, so existing (committed) assets stay unchanged. Delete an asset to rebuild it;
+the main map and its sublevel are rebuilt together.
 """
 
 import unreal
@@ -21,6 +23,7 @@ import unreal
 ROOT = "/DistanceLODder/Tests"
 MESH_PATH = ROOT + "/SM_DistanceLODderTest"
 MAP_PATH = ROOT + "/Maps/FTEST_DistanceLODder"
+PERF_MAP_PATH = ROOT + "/Maps/FTEST_DistanceLODderPerf"
 SUBLEVEL_PATH = ROOT + "/Maps/L_DistanceLODder_Streamed"  # No FTEST_ prefix, or it gets listed as a test map
 SWITCH_DISTANCES = [1000.0, 2000.0, 4000.0]
 
@@ -66,12 +69,10 @@ def spawn_mesh(mesh, location, tags, movable=False):
     return actor
 
 
-def main():
-    for path in [MAP_PATH, SUBLEVEL_PATH, MESH_PATH]:
+def create_main_map(mesh):
+    for path in [MAP_PATH, SUBLEVEL_PATH]:
         if assets.does_asset_exist(path):
             assets.delete_asset(path)
-
-    mesh = create_mesh()
 
     # Sublevel first, so it can be added to the main map.
     level_editor.new_level(SUBLEVEL_PATH)
@@ -89,6 +90,29 @@ def main():
     world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
     unreal.EditorLevelUtils.add_level_to_world(world, SUBLEVEL_PATH, unreal.LevelStreamingDynamic)
     level_editor.save_all_dirty_levels()
+    log("created " + MAP_PATH + " and " + SUBLEVEL_PATH)
+
+
+def create_perf_map(mesh):
+    level_editor.new_level(PERF_MAP_PATH)
+    test = actors.spawn_actor_from_class(unreal.DistanceLODderPerfTest, unreal.Vector(0, 0, 200))
+    test.set_actor_label("DistanceLODderPerfTest")
+    test.set_editor_property("mesh", mesh)
+    level_editor.save_current_level()
+    log("created " + PERF_MAP_PATH)
+
+
+def main():
+    if assets.does_asset_exist(MESH_PATH):
+        mesh = assets.load_asset(MESH_PATH)
+    else:
+        mesh = create_mesh()
+
+    if not assets.does_asset_exist(MAP_PATH) or not assets.does_asset_exist(SUBLEVEL_PATH):
+        create_main_map(mesh)
+
+    if not assets.does_asset_exist(PERF_MAP_PATH):
+        create_perf_map(mesh)
 
     log("done")
 
