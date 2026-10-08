@@ -390,6 +390,12 @@ void UDistanceLODderSubsystem::OnActorSpawned(AActor* Actor)
 
 bool UDistanceLODderSubsystem::GetViewpoint(FVector& OutLocation)
 {
+	if (ViewpointOverride.IsSet())
+	{
+		OutLocation = ViewpointOverride.GetValue();
+		return true;
+	}
+
 	const APlayerController* PlayerController = GEngine ? GEngine->GetFirstLocalPlayerController(GetWorld()) : nullptr;
 	APawn* Pawn = PlayerController ? PlayerController->GetPawn() : nullptr;
 	if (!Pawn)

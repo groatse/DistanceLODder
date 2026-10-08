@@ -10,6 +10,7 @@
 #include "DistanceLODderSubsystem.generated.h"
 
 class AActor;
+class FDistanceLODderWorldSpec;
 class APawn;
 class UCameraComponent;
 class ULevel;
@@ -52,7 +53,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "DistanceLODder")
 	int32 GetNumTrackedComponents() const { return Entries.Num(); }
 
+	UFUNCTION(BlueprintPure, Category = "DistanceLODder")
+	bool IsComponentTracked(const UStaticMeshComponent* Component) const { return ComponentToEntry.Contains(Component); }
+
+	/** Measures distances from this location instead of the player pawn's HMD camera. Used by the tests. */
+	void SetViewpointOverride(const FVector& Location) { ViewpointOverride = Location; }
+	void ClearViewpointOverride() { ViewpointOverride.Reset(); }
+
 protected:
+	friend class FDistanceLODderWorldSpec; // Calls the level handlers directly instead of broadcasting the global delegates.
+
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
 private:
@@ -105,6 +115,7 @@ private:
 
 	TWeakObjectPtr<APawn> CachedPawn;
 	TWeakObjectPtr<UCameraComponent> CachedCamera;
+	TOptional<FVector> ViewpointOverride;
 
 	/** Refreshed every tick from the settings, so they can be tuned live. */
 	DistanceLODder::FDistanceFactors DistanceFactors;
