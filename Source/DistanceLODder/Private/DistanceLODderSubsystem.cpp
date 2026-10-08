@@ -138,7 +138,7 @@ void UDistanceLODderSubsystem::Tick(float DeltaTime)
 	}
 
 	const UDistanceLODderSettings* Settings = GetDefault<UDistanceLODderSettings>();
-	UpdateDistanceFactors();
+	DistanceFactors = DistanceLODder::FDistanceFactors::Make(Settings->ReferenceVerticalFOV, Settings->DistanceScale, Settings->HysteresisPercent);
 
 	if (PassCursor == INDEX_NONE
 		&& (bPassRequested || FVector::DistSquared(Viewpoint, LastPassViewpoint) > FMath::Square(Settings->MovementThreshold)))
@@ -291,14 +291,20 @@ bool UDistanceLODderSubsystem::BuildEntry(UStaticMeshComponent* Component, FTrac
 	const UDistanceLODderSettings* Settings = GetDefault<UDistanceLODderSettings>();
 	const bool bGlobal = Settings->bUseGlobalScreenSizes;
 
-	int32 NumLODs = FMath::Min(RenderData->LODResources.Num(), MaxLODs);
+	int32 NumLODs = FMath::Min(RenderData->LODResources.Num(), DistanceLODder::MaxLODs);
 	if (bGlobal)
 	{
 		NumLODs = FMath::Min(NumLODs, UDistanceLODderSettings::NumGlobalLODs);
 	}
 
-	const float Radius = Component->Bounds.SphereRadius;
-	if (NumLODs < 2 || Radius <= 0.f)
+	TArray<float, TInlineAllocator<DistanceLODder::MaxLODs>> ScreenSizes;
+	for (int32 LODIndex = 0; LODIndex < NumLODs; ++LODIndex)
+	{
+		ScreenSizes.Add(bGlobal ? Settings->GetGlobalScreenSize(LODIndex) : RenderData->ScreenSize[LODIndex].GetValue());
+	}
+
+	const int32 MinLOD = Component->GetOverrideMinLOD() ? Component->GetMinLOD() : Mesh->GetMinLODIdx();
+	if (!DistanceLODder::BuildThresholds(Component->Bounds.SphereRadius, ScreenSizes, MinLOD, OutEntry.Thresholds))
 	{
 		return false;
 	}
@@ -306,28 +312,7 @@ bool UDistanceLODderSubsystem::BuildEntry(UStaticMeshComponent* Component, FTrac
 	OutEntry.Component = Component;
 	OutEntry.Key = Component;
 	OutEntry.Origin = Component->Bounds.Origin;
-	OutEntry.MinLOD = static_cast<int8>(FMath::Clamp(Component->GetOverrideMinLOD() ? Component->GetMinLOD() : Mesh->GetMinLODIdx(), 0, NumLODs - 1));
-	OutEntry.MaxLOD = static_cast<int8>(NumLODs - 1);
-
-	// UE uses LOD i while the bounds' screen size (M * R / D) is below ScreenSize[i], i.e. beyond D = M * R / ScreenSize[i].
-	float PrevDist = 0.f;
-	for (int32 LODIndex = 1; LODIndex < NumLODs; ++LODIndex)
-	{
-		const float ScreenSize = bGlobal ? Settings->GetGlobalScreenSize(LODIndex) : RenderData->ScreenSize[LODIndex].GetValue();
-		if (ScreenSize <= UE_KINDA_SMALL_NUMBER)
-		{
-			// LOD never reached.
-			OutEntry.MaxLOD = static_cast<int8>(LODIndex - 1);
-			break;
-		}
-
-		// Keep distances increasing even if the screen sizes aren't decreasing.
-		const float Dist = FMath::Max(Radius / ScreenSize, PrevDist);
-		PrevDist = Dist;
-		OutEntry.SwitchDistSq[LODIndex] = FMath::Square(Dist);
-	}
-
-	return OutEntry.MaxLOD > OutEntry.MinLOD;
+	return true;
 }
 
 void UDistanceLODderSubsystem::UnregisterEntry(int32 Index, bool bResetForcedLOD)
@@ -440,49 +425,6 @@ bool UDistanceLODderSubsystem::GetViewpoint(FVector& OutLocation)
 	return true;
 }
 
-void UDistanceLODderSubsystem::UpdateDistanceFactors()
-{
-	const UDistanceLODderSettings* Settings = GetDefault<UDistanceLODderSettings>();
-
-	// Projection magnification of the reference view, max(M00, M11), which is the narrower axis.
-	const float Magnification = 1.f / FMath::Tan(FMath::DegreesToRadians(Settings->ReferenceVerticalFOV * 0.5f));
-	const float Hysteresis = Settings->HysteresisPercent * 0.01f;
-
-	SwitchFactorSq = FMath::Square(Magnification * Settings->DistanceScale);
-	CoarserFactorSq = SwitchFactorSq * FMath::Square(1.f + Hysteresis);
-	FinerFactorSq = SwitchFactorSq * FMath::Square(1.f - Hysteresis);
-}
-
-int32 UDistanceLODderSubsystem::ComputeLOD(const FTrackedMesh& Entry, float DistSq) const
-{
-	if (Entry.CurrentLOD == INDEX_NONE)
-	{
-		// First pick: plain thresholds, no hysteresis.
-		int32 LOD = Entry.MinLOD;
-		while (LOD < Entry.MaxLOD && DistSq > Entry.SwitchDistSq[LOD + 1] * SwitchFactorSq)
-		{
-			++LOD;
-		}
-		return LOD;
-	}
-
-	int32 LOD = Entry.CurrentLOD;
-	while (LOD < Entry.MaxLOD && DistSq > Entry.SwitchDistSq[LOD + 1] * CoarserFactorSq)
-	{
-		++LOD;
-	}
-
-	if (LOD == Entry.CurrentLOD)
-	{
-		while (LOD > Entry.MinLOD && DistSq < Entry.SwitchDistSq[LOD] * FinerFactorSq)
-		{
-			--LOD;
-		}
-	}
-
-	return LOD;
-}
-
 bool UDistanceLODderSubsystem::EvaluateBatch(const FVector& Viewpoint, int32 MaxCount, int32& NumEvaluated)
 {
 	const int32 MaxIndex = Entries.GetMaxIndex();
@@ -513,7 +455,7 @@ bool UDistanceLODderSubsystem::EvaluateBatch(const FVector& Viewpoint, int32 Max
 		++NumEvaluated;
 		Entry.LastDistSq = static_cast<float>(FVector::DistSquared(Viewpoint, Entry.Origin));
 
-		const int32 NewLOD = ComputeLOD(Entry, Entry.LastDistSq);
+		const int32 NewLOD = DistanceLODder::ComputeLOD(Entry.Thresholds, Entry.CurrentLOD, Entry.LastDistSq, DistanceFactors);
 		if (NewLOD != Entry.CurrentLOD)
 		{
 			if (Entry.PendingLOD == INDEX_NONE)

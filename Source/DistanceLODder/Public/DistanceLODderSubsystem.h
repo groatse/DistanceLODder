@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Containers/SparseArray.h"
+#include "DistanceLODderMath.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "UObject/ObjectKey.h"
 
@@ -55,23 +56,13 @@ protected:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
 private:
-	static constexpr int32 MaxLODs = 8; // MAX_STATIC_MESH_LODS
-
 	struct FTrackedMesh
 	{
 		TWeakObjectPtr<UStaticMeshComponent> Component;
 		TObjectKey<UStaticMeshComponent> Key;
 		FVector Origin = FVector::ZeroVector;
-
-		/**
-		 * (Radius / ScreenSize[i])^2, i.e. the squared distance beyond which LOD i is used, before the
-		 * reference magnification, distance scale and hysteresis are applied. Index 0 unused.
-		 */
-		float SwitchDistSq[MaxLODs] = {};
-
+		DistanceLODder::FLODThresholds Thresholds;
 		float LastDistSq = 0.f;
-		int8 MinLOD = 0;
-		int8 MaxLOD = 0;
 		/** LOD we've forced, INDEX_NONE until first applied. */
 		int8 CurrentLOD = INDEX_NONE;
 		/** LOD waiting in the change queue, INDEX_NONE when not queued. */
@@ -89,8 +80,6 @@ private:
 	bool BuildEntry(UStaticMeshComponent* Component, FTrackedMesh& OutEntry) const;
 
 	bool GetViewpoint(FVector& OutLocation);
-	int32 ComputeLOD(const FTrackedMesh& Entry, float DistSq) const;
-	void UpdateDistanceFactors();
 
 	/** Evaluates up to MaxCount entries starting at the pass cursor. Returns true when the pass is finished. */
 	bool EvaluateBatch(const FVector& Viewpoint, int32 MaxCount, int32& NumEvaluated);
@@ -117,10 +106,8 @@ private:
 	TWeakObjectPtr<APawn> CachedPawn;
 	TWeakObjectPtr<UCameraComponent> CachedCamera;
 
-	/** Multipliers on SwitchDistSq: plain, going coarser (+hysteresis) and going finer (-hysteresis). Refreshed every tick from settings. */
-	float SwitchFactorSq = 1.f;
-	float CoarserFactorSq = 1.f;
-	float FinerFactorSq = 1.f;
+	/** Refreshed every tick from the settings, so they can be tuned live. */
+	DistanceLODder::FDistanceFactors DistanceFactors;
 
 	FVector LastPassViewpoint = FVector(UE_BIG_NUMBER);
 	int32 PassCursor = INDEX_NONE; // INDEX_NONE = no pass in progress
