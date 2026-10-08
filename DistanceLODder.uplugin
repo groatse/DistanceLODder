@@ -20,6 +20,11 @@
 			"Name": "DistanceLODder",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "DistanceLODderTests",
+			"Type": "DeveloperTool",
+			"LoadingPhase": "Default"
 		}
 	]
 }
